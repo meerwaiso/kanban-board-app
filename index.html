@@ -510,7 +510,10 @@
             }
 
             return {
+
                 load: () => load(),
+
+
 
                 getState: () => JSON.parse(JSON.stringify(state)),
 
@@ -749,8 +752,10 @@
         // ============================================
         // App Initialization
         // ============================================
-        View.init();
+       View.init();
         Store.load();
-    </script>
+=======
+        
+            </script>
 </body>
 </html>
