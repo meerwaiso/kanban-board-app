@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Board</title>
+    <style>
+        /* ============================================
+           CSS Custom Properties
+           ============================================ */
+        :root {
+            --color-bg: #f0f2f5;
+            --color-board-bg: #ffffff;
+            --color-column-bg: #f8f9fa;
+            --color-card-bg: #ffffff;
+            --color-card-border: #e1e4e8;
+            --color-card-hover: #f3f4f6;
+            --color-text-primary: #24292e;
+            --color-text-secondary: #586069;
+            --color-text-muted: #959da5;
+            --color-accent: #0366d6;
+            --color-accent-hover: #0256b9;
+            --color-danger: #d73a49;
+            --color-danger-hover: #cb2431;
+            --color-success: #28a745;
+            --color-warning: #ff9800;
+            --color-column-neu: #6f42c1;
+            --color-column-inprogress: #f0ad4e;
+            --color-column-erledigt: #28a745;
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --transition-fast: 150ms ease;
+            --transition-normal: 250ms ease;
+        }
+
+        /* ============================================
+           Reset & Base
+           ============================================ */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: var(--color-bg);
+            color: var(--color-text-primary);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        /* ============================================
+           Header
+           ============================================ */
+        .header {
+            background: linear-gradient(135deg, var(--color-accent), #6e40c9);
+            color: #fff;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: var(--shadow-md);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* ============================================
+           Buttons
+           ============================================ */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color var(--transition-fast), transform var(--transition-fast);
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background-color: #fff;
+            color: var(--color-accent);
+        }
+
+        .btn-primary:hover {
+            background-color: #f0f0f0;
+        }
+
+        .btn-danger {
+            background-color: var(--color-danger);
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background-color: var(--color-danger-hover);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--color-text-secondary);
+            padding: 4px 8px;
+        }
+
+        .btn-ghost:hover {
+            background-color: var(--color-card-hover);
+            color: var(--color-danger);
+        }
+
+        /* ============================================
+           Board Layout
+           ============================================ */
+        .board {
+            display: flex;
+            gap: 20px;
+            padding: 24px;
+            max-width: 1400px;
+            margin: 0 auto;
+            min-height: calc(100vh - 64px);
+            align-items: flex-start;
+        }
+
+        /* ============================================
+           Columns
+           ============================================ */
+        .column {
+            flex: 1;
+            min-width: 280px;
+            max-width: 400px;
+            background-color: var(--color-column-bg);
+            border-radius: var(--radius-lg);
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 112px);
+        }
+
+        .column-header {
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid transparent;
+        }
+
+        .column[data-status="neu"] .column-header {
+            border-bottom-color: var(--color-column-neu);
+        }
+
+        .column[data-status="inprogress"] .column-header {
+            border-bottom-color: var(--color-column-inprogress);
+        }
+
+        .column[data-status="erledigt"] .column-header {
+            border-bottom-color: var(--color-column-erledigt);
+        }
+
+        .column-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .column-count {
+            background-color: var(--color-text-muted);
+            color: #fff;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 12px;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .column-cards {
+            padding: 8px 12px 12px;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .column-cards.drag-over {
+            background-color: rgba(3, 102, 214, 0.06);
+            border-radius: var(--radius-md);
+        }
+
+        /* ============================================
+           Cards
+           ============================================ */
+        .card {
+            background-color: var(--color-card-bg);
+            border: 1px solid var(--color-card-border);
+            border-radius: var(--radius-md);
+            padding: 12px 14px;
+            cursor: grab;
+            transition: box-shadow var(--transition-fast), transform var(--transition-fast), border-color var(--transition-fast);
+            position: relative;
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+            border-color: var(--color-accent);
+        }
+
+        .card:active {
+            cursor: grabbing;
+        }
+
+        .card.dragging {
+            opacity: 0.5;
+            transform: rotate(2deg);
+        }
+
+        .card-title {
+            font-size: 0.925rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+            word-break: break-word;
+        }
+
+        .card-description {
+            font-size: 0.825rem;
+            color: var(--color-text-secondary);
+            word-break: break-word;
+        }
+
+        .card-actions {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: none;
+        }
+
+        .card:hover .card-actions {
+            display: flex;
+        }
+
+        /* ============================================
+           Modal / Dialog
+           ============================================ */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity var(--transition-normal), visibility var(--transition-normal);
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background-color: var(--color-board-bg);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            width: 90%;
+            max-width: 440px;
+            box-shadow: var(--shadow-lg);
+            transform: translateY(20px);
+            transition: transform var(--transition-normal);
+        }
+
+        .modal-overlay.active .modal {
+            transform: translateY(0);
+        }
+
+        .modal h2 {
+            font-size: 1.2rem;
+            margin-bottom: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--color-text-secondary);
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--color-card-border);
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            font-family: inherit;
+            transition: border-color var(--transition-fast);
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--color-accent);
+            box-shadow: 0 0 0 3px rgba(3, 102, 214, 0.15);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 18px;
+        }
+
+        .btn-cancel {
+            background-color: var(--color-column-bg);
+            color: var(--color-text-secondary);
+        }
+
+        .btn-cancel:hover {
+            background-color: var(--color-card-hover);
+        }
+
+        /* ============================================
+           Drop placeholder
+           ============================================ */
+        .drop-placeholder {
+            border: 2px dashed var(--color-accent);
+            border-radius: var(--radius-md);
+            min-height: 60px;
+            background-color: rgba(3, 102, 214, 0.04);
+            transition: min-height var(--transition-fast);
+        }
+
+        /* ============================================
+           Scrollbar Styling
+           ============================================ */
+        .column-cards::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .column-cards::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .column-cards::-webkit-scrollbar-thumb {
+            background-color: var(--color-text-muted);
+            border-radius: 3px;
+        }
+
+        /* ============================================
+           Responsive
+           ============================================ */
+        @media (max-width: 900px) {
+            .board {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .column {
+                max-width: none;
+                max-height: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="header">
+        <h1>&#128203; Kanban Board</h1>
+        <div class="header-actions">
+            <button class="btn btn-primary" id="btn-add-card">&#43; Neue Karte</button>
+        </div>
+    </header>
+
+    <!-- Board -->
+    <main class="board" id="board">
+        <section class="column" data-status="neu">
+            <div class="column-header">
+                <span class="column-title">Neu</span>
+                <span class="column-count">0</span>
+            </div>
+            <div class="column-cards" data-status="neu"></div>
+        </section>
+
+        <section class="column" data-status="inprogress">
+            <div class="column-header">
+                <span class="column-title">In Bearbeitung</span>
+                <span class="column-count">0</span>
+            </div>
+            <div class="column-cards" data-status="inprogress"></div>
+        </section>
+
+        <section class="column" data-status="erledigt">
+            <div class="column-header">
+                <span class="column-title">Erledigt</span>
+                <span class="column-count">0</span>
+            </div>
+            <div class="column-cards" data-status="erledigt"></div>
+        </section>
+    </main>
+
+    <!-- Add Card Modal -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal" id="modal">
+            <h2>Neue Karte</h2>
+            <form id="add-card-form">
+                <div class="form-group">
+                    <label for="card-title">Titel *</label>
+                    <input type="text" id="card-title" placeholder="Karten-Titel eingeben..." required maxlength="200">
+                </div>
+                <div class="form-group">
+                    <label for="card-description">Beschreibung (optional)</label>
+                    <textarea id="card-description" placeholder="Kurze Beschreibung..." maxlength="1000"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-cancel" id="btn-cancel">Abbrechen</button>
+                    <button type="submit" class="btn btn-primary" style="background-color: var(--color-accent); color: #fff;">Hinzuf&#252;gen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // Store — State Management mit Observer-Pattern
+        // ============================================
+        const Store = (() => {
+            const STORAGE_KEY = 'kanban_board_data';
+            let state = { cards: [] };
+            const listeners = [];
+
+            function generateId() {
+                return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+            }
+
+            function notify() {
+                listeners.forEach(fn => fn(state));
+            }
+
+            function save() {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                } catch (e) {
+                    console.warn('localStorage write failed:', e);
+                }
+            }
+
+            function load() {
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    if (raw) {
+                        const parsed = JSON.parse(raw);
+                        if (parsed && Array.isArray(parsed.cards)) {
+                            state = parsed;
+                            notify();
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('localStorage read failed:', e);
+                }
+                // Default sample data
+                state = {
+                    cards: [
+                        { id: generateId(), title: 'Willkommen!', description: 'Ziehe diese Karte per Drag & Drop in eine andere Spalte.', status: 'neu', createdAt: Date.now() },
+                        { id: generateId(), title: 'Karten erstellen', description: 'Klicke auf "Neue Karte" oben rechts.', status: 'neu', createdAt: Date.now() },
+                        { id: generateId(), title: 'Karte löschen', description: 'Schwebe über eine Karte und klicke das &#128465;-Symbol.', status: 'inprogress', createdAt: Date.now() },
+                    ]
+                };
+                save();
+                notify();
+            }
+
+            return {
+                getState: () => JSON.parse(JSON.stringify(state)),
+
+                subscribe: (fn) => {
+                    listeners.push(fn);
+                    return () => {
+                        const idx = listeners.indexOf(fn);
+                        if (idx !== -1) listeners.splice(idx, 1);
+                    };
+                },
+
+                addCard: (title, description) => {
+                    const card = {
+                        id: generateId(),
+                        title: title.trim(),
+                        description: description ? description.trim() : '',
+                        status: 'neu',
+                        createdAt: Date.now()
+                    };
+                    state.cards.push(card);
+                    save();
+                    notify();
+                    return card;
+                },
+
+                deleteCard: (cardId) => {
+                    state.cards = state.cards.filter(c => c.id !== cardId);
+                    save();
+                    notify();
+                },
+
+                moveCard: (cardId, newStatus) => {
+                    const card = state.cards.find(c => c.id === cardId);
+                    if (card) {
+                        card.status = newStatus;
+                        save();
+                        notify();
+                    }
+                }
+            };
+        })();
+
+        // ============================================
+        // View — Rendering
+        // ============================================
+        const View = (() => {
+            const board = document.getElementById('board');
+            const modalOverlay = document.getElementById('modal-overlay');
+            const addCardForm = document.getElementById('add-card-form');
+            const btnAddCard = document.getElementById('btn-add-card');
+            const btnCancel = document.getElementById('btn-cancel');
+
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            function createCardElement(card) {
+                const el = document.createElement('div');
+                el.className = 'card';
+                el.setAttribute('draggable', 'true');
+                el.dataset.cardId = card.id;
+
+                el.innerHTML = `
+                    <div class="card-actions">
+                        <button class="btn btn-ghost btn-delete" title="Karte l&ouml;schen">&#128465;</button>
+                    </div>
+                    <div class="card-title">${escapeHtml(card.title)}</div>
+                    ${card.description ? `<div class="card-description">${escapeHtml(card.description)}</div>` : ''}
+                `;
+
+                // Delete handler
+                el.querySelector('.btn-delete').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    Store.deleteCard(card.id);
+                });
+
+                // Drag events
+                el.addEventListener('dragstart', handleDragStart);
+                el.addEventListener('dragend', handleDragEnd);
+
+                return el;
+            }
+
+            function render(state) {
+                const columns = board.querySelectorAll('.column');
+                columns.forEach(column => {
+                    const status = column.dataset.status;
+                    const cardsContainer = column.querySelector('.column-cards');
+                    const countEl = column.querySelector('.column-count');
+                    const cards = state.cards.filter(c => c.status === status);
+
+                    // Update count
+                    countEl.textContent = cards.length;
+
+                    // Render cards
+                    cardsContainer.innerHTML = '';
+                    cards.forEach(card => {
+                        cardsContainer.appendChild(createCardElement(card));
+                    });
+                });
+            }
+
+            // ---- Drag & Drop ----
+            let draggedCardId = null;
+            let placeholder = null;
+
+            function handleDragStart(e) {
+                draggedCardId = e.target.dataset.cardId;
+                e.target.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', draggedCardId);
+
+                // Create placeholder
+                placeholder = document.createElement('div');
+                placeholder.className = 'drop-placeholder';
+            }
+
+            function handleDragEnd(e) {
+                e.target.classList.remove('dragging');
+                draggedCardId = null;
+                if (placeholder && placeholder.parentNode) {
+                    placeholder.parentNode.removeChild(placeholder);
+                }
+                placeholder = null;
+                // Remove all drag-over classes
+                board.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+            }
+
+            function setupDropZones() {
+                const dropZones = board.querySelectorAll('.column-cards');
+
+                dropZones.forEach(zone => {
+                    zone.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        zone.classList.add('drag-over');
+
+                        // Insert placeholder at drop position
+                        const afterElement = getDragAfterElement(zone, e.clientY);
+                        if (placeholder) {
+                            if (afterElement == null) {
+                                zone.appendChild(placeholder);
+                            } else {
+                                zone.insertBefore(placeholder, afterElement);
+                            }
+                        }
+                    });
+
+                    zone.addEventListener('dragleave', (e) => {
+                        if (!zone.contains(e.relatedTarget)) {
+                            zone.classList.remove('drag-over');
+                            if (placeholder && placeholder.parentNode === zone) {
+                                zone.removeChild(placeholder);
+                            }
+                        }
+                    });
+
+                    zone.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        zone.classList.remove('drag-over');
+                        const cardId = e.dataTransfer.getData('text/plain');
+                        const newStatus = zone.dataset.status;
+
+                        if (cardId && newStatus) {
+                            Store.moveCard(cardId, newStatus);
+                        }
+
+                        if (placeholder && placeholder.parentNode) {
+                            placeholder.parentNode.removeChild(placeholder);
+                        }
+                        placeholder = null;
+                    });
+                });
+            }
+
+            function getDragAfterElement(container, y) {
+                const draggableElements = [...container.querySelectorAll('.card:not(.dragging)')];
+
+                return draggableElements.reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = y - box.top - box.height / 2;
+                    if (offset < 0 && offset > closest.offset) {
+                        return { offset, element: child };
+                    } else {
+                        return closest;
+                    }
+                }, { offset: Number.NEGATIVE_INFINITY }).element;
+            }
+
+            // ---- Modal ----
+            function openModal() {
+                modalOverlay.classList.add('active');
+                document.getElementById('card-title').focus();
+            }
+
+            function closeModal() {
+                modalOverlay.classList.remove('active');
+                addCardForm.reset();
+            }
+
+            function setupModalEvents() {
+                btnAddCard.addEventListener('click', openModal);
+                btnCancel.addEventListener('click', closeModal);
+
+                modalOverlay.addEventListener('click', (e) => {
+                    if (e.target === modalOverlay) closeModal();
+                });
+
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') closeModal();
+                });
+
+                addCardForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const title = document.getElementById('card-title').value;
+                    const description = document.getElementById('card-description').value;
+
+                    if (title.trim()) {
+                        Store.addCard(title, description);
+                        closeModal();
+                    }
+                });
+            }
+
+            return {
+                init: () => {
+                    setupModalEvents();
+                    setupDropZones();
+                    Store.subscribe(render);
+                }
+            };
+        })();
+
+        // ============================================
+        // App Initialization
+        // ============================================
+        Store.load();
+        View.init();
+    </script>
+</body>
+</html>
