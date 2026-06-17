@@ -1,6 +1,6 @@
 #For all agents
 
- **Never:** Load diffs that contain Base64-encoded content 
+ **Never:** Load diffs that contain Base64-encoded content .
    (data:application/*, base64 strings > 500 chars). 
    Skip or summarize only filename changes.
 
