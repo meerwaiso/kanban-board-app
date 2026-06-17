@@ -112,6 +112,7 @@ Load only what you strictly need for the current task. No preemptive loading.
 ### When implementing a task:
 1. Read the Jira ticket (assigned to developer-agent and is in the Implementierung column) completely (and only this ticket).
 2. Identify the affected files and read *only* those files.
+3.Create for each task a new feature/fix branch
 3. Implement the required code.
 4. Create a commit with a clear message: `[SCRUM-XX] Short description`.
 5. Open a Pull Request (PR) containing a title, a short description, and the Jira ticket link.
