@@ -283,6 +283,37 @@
             border-bottom: 2px solid transparent;
         }
 
+        /* Column drag handle — cursor grab for visual hint */
+        /* [SCRUM-232] */
+        .column-header {
+            cursor: grab;
+            user-select: none;
+        }
+
+        .column-header:active {
+            cursor: grabbing;
+        }
+
+        /* Column dragging visual indicator */
+        /* [SCRUM-232] */
+        .column.dragging-column {
+            opacity: 0.4;
+            border: 2px dashed var(--color-accent);
+        }
+
+        /* Column drop placeholder */
+        /* [SCRUM-232] */
+        .column-drop-placeholder {
+            flex: 1;
+            min-width: 280px;
+            max-width: 400px;
+            min-height: 200px;
+            border: 2px dashed var(--color-accent);
+            border-radius: var(--radius-lg);
+            background-color: rgba(3, 102, 214, 0.04);
+            transition: min-height var(--transition-fast);
+        }
+
         .column[data-status="neu"] .column-header {
             border-bottom-color: var(--color-column-neu);
         }
@@ -602,7 +633,8 @@
         // ============================================
         const Store = (() => {
             const STORAGE_KEY = 'kanban_board_data';
-            let state = { cards: [] };
+            const DEFAULT_COLUMN_ORDER = ['neu', 'inprogress', 'blocked', 'erledigt'];
+            let state = { cards: [], columnOrder: DEFAULT_COLUMN_ORDER };
             const listeners = [];
 
             function generateId() {
@@ -628,6 +660,10 @@
                         const parsed = JSON.parse(raw);
                         if (parsed && Array.isArray(parsed.cards)) {
                             state = parsed;
+                            // Migration: add columnOrder if missing
+                            if (!Array.isArray(state.columnOrder) || state.columnOrder.length !== DEFAULT_COLUMN_ORDER.length) {
+                                state.columnOrder = DEFAULT_COLUMN_ORDER;
+                            }
                             notify();
                             return;
                         }
@@ -641,10 +677,21 @@
                         { id: generateId(), title: 'Willkommen!', description: 'Ziehe diese Karte per Drag & Drop in eine andere Spalte.', status: 'neu', createdAt: Date.now() },
                         { id: generateId(), title: 'Karten erstellen', description: 'Klicke auf "Neue Karte" oben rechts.', status: 'neu', createdAt: Date.now() },
                         { id: generateId(), title: 'Karte löschen', description: 'Schwebe über eine Karte und klicke das &#128465;-Symbol.', status: 'inprogress', createdAt: Date.now() },
-                    ]
+                    ],
+                    columnOrder: DEFAULT_COLUMN_ORDER
                 };
                 save();
                 notify();
+            }
+
+            function reorderColumns(newOrder) {
+                state.columnOrder = newOrder;
+                save();
+                notify();
+            }
+
+            function getColumnOrder() {
+                return state.columnOrder;
             }
 
             return {
@@ -690,7 +737,10 @@
                         save();
                         notify();
                     }
-                }
+                },
+
+                reorderColumns: (newOrder) => reorderColumns(newOrder),
+                getColumnOrder: () => getColumnOrder()
             };
         })();
 
@@ -730,7 +780,7 @@
                     Store.deleteCard(card.id);
                 });
 
-                // Drag events
+                // Drag events (only for cards, not column headers)
                 el.addEventListener('dragstart', handleDragStart);
                 el.addEventListener('dragend', handleDragEnd);
 
@@ -738,17 +788,27 @@
             }
 
             function render(state) {
+                // 1. Reorder DOM columns to match columnOrder
                 const columns = board.querySelectorAll('.column');
-                columns.forEach(column => {
-                    const status = column.dataset.status;
+                const order = Store.getColumnOrder();
+                const columnMap = {};
+                columns.forEach(col => columnMap[col.dataset.status] = col);
+                order.forEach(status => {
+                    if (columnMap[status]) {
+                        board.appendChild(columnMap[status]);
+                    }
+                });
+
+                // 2. Render cards inside each column (in columnOrder)
+                order.forEach(status => {
+                    const column = columnMap[status];
+                    if (!column) return;
                     const cardsContainer = column.querySelector('.column-cards');
                     const countEl = column.querySelector('.column-count');
                     const cards = state.cards.filter(c => c.status === status);
 
-                    // Update count
                     countEl.textContent = cards.length;
 
-                    // Render cards
                     cardsContainer.innerHTML = '';
                     cards.forEach(card => {
                         cardsContainer.appendChild(createCardElement(card));
@@ -756,7 +816,7 @@
                 });
             }
 
-            // ---- Drag & Drop ----
+            // ---- Card Drag & Drop ----
             let draggedCardId = null;
             let placeholder = null;
 
@@ -764,9 +824,9 @@
                 draggedCardId = e.target.dataset.cardId;
                 e.target.classList.add('dragging');
                 e.dataTransfer.effectAllowed = 'move';
+                // No 'column:' prefix — this signals a CARD drag
                 e.dataTransfer.setData('text/plain', draggedCardId);
 
-                // Create placeholder
                 placeholder = document.createElement('div');
                 placeholder.className = 'drop-placeholder';
             }
@@ -778,7 +838,6 @@
                     placeholder.parentNode.removeChild(placeholder);
                 }
                 placeholder = null;
-                // Remove all drag-over classes
                 board.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
             }
 
@@ -791,13 +850,16 @@
                         e.dataTransfer.dropEffect = 'move';
                         zone.classList.add('drag-over');
 
-                        // Insert placeholder at drop position
-                        const afterElement = getDragAfterElement(zone, e.clientY);
-                        if (placeholder) {
-                            if (afterElement == null) {
-                                zone.appendChild(placeholder);
-                            } else {
-                                zone.insertBefore(placeholder, afterElement);
+                        const data = e.dataTransfer.getData('text/plain');
+                        // Only show card placeholder for card drags (not column drags)
+                        if (!data.startsWith('column:')) {
+                            const afterElement = getDragAfterElement(zone, e.clientY);
+                            if (placeholder) {
+                                if (afterElement == null) {
+                                    zone.appendChild(placeholder);
+                                } else {
+                                    zone.insertBefore(placeholder, afterElement);
+                                }
                             }
                         }
                     });
@@ -814,11 +876,12 @@
                     zone.addEventListener('drop', (e) => {
                         e.preventDefault();
                         zone.classList.remove('drag-over');
-                        const cardId = e.dataTransfer.getData('text/plain');
+                        const data = e.dataTransfer.getData('text/plain');
                         const newStatus = zone.dataset.status;
 
-                        if (cardId && newStatus) {
-                            Store.moveCard(cardId, newStatus);
+                        // Only handle card drops here — column drops start with 'column:'
+                        if (!data.startsWith('column:') && data && newStatus) {
+                            Store.moveCard(data, newStatus);
                         }
 
                         if (placeholder && placeholder.parentNode) {
@@ -884,6 +947,115 @@
                     setupDropZones();
                     Store.subscribe(render);
                 }
+            };
+        })();
+
+        // ============================================
+        // ColumnDrag — Column Drag & Drop
+        // [SCRUM-232]
+        // ============================================
+        const ColumnDrag = (() => {
+            const boardEl = document.getElementById('board');
+            let draggedColumn = null;
+            let columnPlaceholder = null;
+
+            function setupDragHandlers() {
+                boardEl.addEventListener('dragstart', (e) => {
+                    const header = e.target.closest('.column-header');
+                    const card = e.target.closest('.card');
+
+                    // Only intercept column-header drags (not card drags)
+                    if (header && !card) {
+                        const column = header.closest('.column');
+                        if (!column) return;
+
+                        draggedColumn = column;
+                        draggedColumn.classList.add('dragging-column');
+                        e.dataTransfer.effectAllowed = 'move';
+                        // Prefix 'column:' signals a COLUMN drag (not a card)
+                        e.dataTransfer.setData('text/plain', 'column:' + column.dataset.status);
+
+                        columnPlaceholder = document.createElement('div');
+                        columnPlaceholder.className = 'column-drop-placeholder';
+                    }
+                });
+
+                boardEl.addEventListener('dragover', (e) => {
+                    if (!draggedColumn) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+
+                    const targetColumn = e.target.closest('.column');
+                    if (!targetColumn || targetColumn === draggedColumn) return;
+                    if (targetColumn.classList.contains('dragging-column')) return;
+
+                    // Insert placeholder before or after target column
+                    const rect = targetColumn.getBoundingClientRect();
+                    const midX = rect.left + rect.width / 2;
+                    if (columnPlaceholder) {
+                        if (e.clientX < midX) {
+                            targetColumn.parentNode.insertBefore(columnPlaceholder, targetColumn);
+                        } else {
+                            targetColumn.parentNode.insertBefore(columnPlaceholder, targetColumn.nextSibling);
+                        }
+                    }
+                });
+
+                boardEl.addEventListener('drop', (e) => {
+                    if (!draggedColumn) return;
+                    e.preventDefault();
+
+                    const targetColumn = e.target.closest('.column');
+                    if (!targetColumn || targetColumn === draggedColumn) {
+                        cleanup();
+                        return;
+                    }
+                    if (targetColumn.classList.contains('dragging-column')) {
+                        cleanup();
+                        return;
+                    }
+
+                    // Build new column order from the current DOM
+                    const allColumns = boardEl.querySelectorAll('.column');
+                    const newOrder = [];
+                    allColumns.forEach(col => {
+                        if (col !== draggedColumn) {
+                            newOrder.push(col.dataset.status);
+                        }
+                    });
+
+                    // Determine insert position based on mouse X relative to target
+                    const rect = targetColumn.getBoundingClientRect();
+                    const midX = rect.left + rect.width / 2;
+                    const targetIdx = newOrder.indexOf(targetColumn.dataset.status);
+                    const insertIdx = e.clientX < midX ? targetIdx : targetIdx + 1;
+
+                    newOrder.splice(insertIdx, 0, draggedColumn.dataset.status);
+
+                    Store.reorderColumns(newOrder);
+                    cleanup();
+                });
+
+                boardEl.addEventListener('dragend', (e) => {
+                    if (draggedColumn) {
+                        cleanup();
+                    }
+                });
+            }
+
+            function cleanup() {
+                if (draggedColumn) {
+                    draggedColumn.classList.remove('dragging-column');
+                    draggedColumn = null;
+                }
+                if (columnPlaceholder && columnPlaceholder.parentNode) {
+                    columnPlaceholder.parentNode.removeChild(columnPlaceholder);
+                    columnPlaceholder = null;
+                }
+            }
+
+            return {
+                init: () => setupDragHandlers()
             };
         })();
 
@@ -990,9 +1162,9 @@
         ThemeModule.init();
         ThemeToggle.init();
         View.init();
+        ColumnDrag.init();
         Store.load();
 
-        
-            </script>
+        </script>
 </body>
 </html>
