@@ -27,6 +27,7 @@
             --color-column-neu: #6f42c1;
             --color-column-inprogress: #f0ad4e;
             --color-column-erledigt: #28a745;
+            --color-column-blocked: #d73a49;
             --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
             --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
             --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
@@ -60,6 +61,7 @@
             --color-column-neu: #bc8cff;
             --color-column-inprogress: #e3b341;
             --color-column-erledigt: #3fb950;
+            --color-column-blocked: #f85149;
         }
 
         /* Theme Transition */
@@ -291,6 +293,10 @@
 
         .column[data-status="erledigt"] .column-header {
             border-bottom-color: var(--color-column-erledigt);
+        }
+
+        .column[data-status="blocked"] .column-header {
+            border-bottom-color: var(--color-column-blocked);
         }
 
         .column-title {
@@ -550,6 +556,14 @@
                 <span class="column-count">0</span>
             </div>
             <div class="column-cards" data-status="inprogress"></div>
+        </section>
+
+        <section class="column" data-status="blocked">
+            <div class="column-header">
+                <span class="column-title">Blockiert</span>
+                <span class="column-count">0</span>
+            </div>
+            <div class="column-cards" data-status="blocked"></div>
         </section>
 
         <section class="column" data-status="erledigt">
